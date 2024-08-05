@@ -16,6 +16,7 @@ const TokenType = enum {
     mul,
     sub,
     div,
+    pow,
     EOF
 };
 
@@ -35,8 +36,6 @@ const CalcError = error {
 
 //FIXME: instead of arraylist we can return []Token and deinit in tokenize() instead of in main()
 pub fn tokenize(alloc: std.mem.Allocator ,in:[] const u8) !std.ArrayList(Token) {
-    debug.print("Parsing: {s}\n", .{in});
-
     var token_array = std.ArrayList(Token).init(alloc);
     var current_depth: u32 = 0;
 
@@ -74,6 +73,7 @@ pub fn tokenize(alloc: std.mem.Allocator ,in:[] const u8) !std.ArrayList(Token) 
                 '-'  => TokenType.sub,
                 '*'  => TokenType.mul,
                 '/'  => TokenType.div,
+                '^'  => TokenType.pow,
                 else => return CalcError.InvalidCharError
             };
             try token_array.append(Token{
@@ -94,6 +94,7 @@ pub fn getTokImportance(t: Token) !u32 {
     const base_importance: u32 = switch (t.group) {
       TokenType.add, TokenType.sub => 1,
       TokenType.div, TokenType.mul => 2,
+      TokenType.pow => 3,
       TokenType.EOF => 0, // 0 so everything is more important
       TokenType.num => return CalcError.ImportanceUnavailable 
     };
@@ -105,13 +106,13 @@ pub fn doOperation(a: i32, op: TokenType, b: i32) !i32 {
         TokenType.add => a + b,
         TokenType.sub => a - b,
         TokenType.mul => a * b,
+        TokenType.pow => std.math.pow(i32, a, b),
         TokenType.div => @divFloor(a, b),
         TokenType.num, TokenType.EOF => return CalcError.UnoperableTokenType
     };
 }
 
 pub fn calculate(allloc: std.mem.Allocator, tokens: std.ArrayList(Token)) !i32 {   
-    debug.print("Performing calculation...\n", .{});
     
     var ops = std.ArrayList(Token).init(allloc);
     defer ops.deinit();
@@ -148,16 +149,24 @@ pub fn calculate(allloc: std.mem.Allocator, tokens: std.ArrayList(Token)) !i32 {
 
 
 pub fn main() !void {
-    
-    
+    const stdout = std.io.getStdOut().writer();
+    const stdin = std.io.getStdIn().reader();
+
     // EXPRESSION DEFINED HERE
-    const expression = "3+2*(5-1+5*(1*3))+4";
-    
+    try stdout.print("Enter expression: ", .{});
+
+    const expression_raw = try stdin.readUntilDelimiterAlloc(std.heap.page_allocator,
+        '\n',
+        8192,
+    );
+    const expression = std.mem.trim(u8, expression_raw, "\r");
+    defer std.heap.page_allocator.free(expression_raw);
     
     
     var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena_allocator.deinit();
     
+    try stdout.print("Parsing...\n", .{});
     var tokens = try tokenize(arena_allocator.allocator(),expression);
     defer tokens.deinit();
     try tokens.append(Token{
@@ -176,8 +185,9 @@ pub fn main() !void {
         });
     }
 
+    try stdout.print("Performing calculation...\n", .{});
     const result = try calculate(arena_allocator.allocator(),tokens);
-    debug.print("Expression has been evaluated successfully!\n", .{});
-    debug.print("{s} = {d}\n", .{expression,result});
+    try stdout.print("Expression has been evaluated successfully!\n", .{});
+    try stdout.print("{s} = {d}\n", .{expression,result});
 
 }
