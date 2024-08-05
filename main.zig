@@ -177,7 +177,7 @@ pub fn main() !void {
     }
 
     const result = try calculate(arena_allocator.allocator(),tokens);
-    debug.print("Expresion has been evaluated successfully!\n", .{});
+    debug.print("Expression has been evaluated successfully!\n", .{});
     debug.print("{s} = {d}\n", .{expression,result});
 
 }
